@@ -1,0 +1,5 @@
+uvicorn
+fastapi
+python-dotenv
+auth0-fastapi-api
+python-jose

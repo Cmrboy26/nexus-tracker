@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Trebuchet MS", sans-serif;
+}
+
+html,
+body {
+  min-height: 100%;
+}
