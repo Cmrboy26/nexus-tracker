@@ -13,14 +13,6 @@ export function meta() {
 }
 
 export default function Home() {
-
-  useEffect(() => {
-    fetch(`${api_url}`)
-    .then(response => response.json())
-    .then(data => console.log(data))
-    .catch(error => console.error(error));
-  });
-
   return (
     <>
       <main className="flex flex-col">

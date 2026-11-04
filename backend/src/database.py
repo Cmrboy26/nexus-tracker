@@ -1,5 +1,6 @@
 import sqlite3
 from os import listdir
+from contextlib import closing
 
 import logging
 
@@ -19,6 +20,14 @@ def execute_query(query, params=()):
     cursor.execute(query, params)
     conn.commit()
     conn.close()
+
+def fetch_all(query, params=()):
+    with closing(get_connection()) as conn:
+        return conn.execute(query, params).fetchall()
+
+def fetch_one(query, params=()):
+    with closing(get_connection()) as conn:
+        return conn.execute(query, params).fetchone()
 
 def initialize_database():
     conn = get_connection()

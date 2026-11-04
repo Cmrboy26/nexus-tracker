@@ -7,4 +7,7 @@ export default defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
+  server: {
+    allowedHosts: ["localhost", "coltencomputer", "nexus.coltenreissmann.me"]
+  }
 });

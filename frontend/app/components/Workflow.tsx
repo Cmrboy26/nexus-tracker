@@ -1,4 +1,5 @@
 import { createContext, useContext, Children, useState } from "react";
+import { Centered } from "./Centered";
 
 const WorkflowContext = createContext<{ next: () => void } | null>(null);
 
@@ -10,19 +11,23 @@ export function useWorkflow() {
     return context;
 }
 
-export function Workflow({ children, initialStep = 0 }: { children: React.ReactNode, initialStep?: number }) {
+export function Workflow({ children, initialStep = 0, onFinish = () => {} }: { children: React.ReactNode, initialStep?: number, onFinish?: () => void }) {
     const sections = Children.toArray(children);
     const [step, setStep] = useState(initialStep);
 
     function next() {
-        setStep((prevStep) => Math.min(prevStep + 1, sections.length - 1));
+        if (step + 1 >= sections.length) {
+            onFinish();
+        } else {
+            setStep((prevStep) => Math.min(prevStep + 1, sections.length - 1));
+        }
     }
 
     return (
         <WorkflowContext.Provider value={{ next }}>
-            <div className="flex flex-col justify-center items-center min-h-screen">
+            <Centered>
                 {sections[step]}
-            </div>
+            </Centered>
         </WorkflowContext.Provider>
     )
 }
