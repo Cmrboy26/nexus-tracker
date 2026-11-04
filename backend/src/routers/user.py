@@ -21,7 +21,7 @@ async def update_profile(user: RequiredAppUser, body: ProfileUpdate):
     updated_user = user_databridge.update_user(str(user.id), display_name, birthday)
     if updated_user is None:
         raise HTTPException(status_code=404, detail="Profile not found")
-    return {"message": "Profile", "user": updated_user}
+    return {"message": "Profile updated", "user": updated_user}
 
 @router.post("/profile/create")
 async def create_profile(claims: Annotated[dict, Depends(require_user)], user: OptionalAppUser, request: Request, response: Response):
@@ -35,7 +35,7 @@ async def create_profile(claims: Annotated[dict, Depends(require_user)], user: O
     try:
         profile_created = user_databridge.create_user(claims["sub"], display_name=display_name, birthday=birthday)
         response.status_code = 201
-        return {"message": "Profile Created"}
+        return {"message": "Profile created"}
     except Exception as e:
         response.status_code = 400
         return {"message": "Failed to create profile", "error": str(e)}

@@ -10,6 +10,7 @@ import {
 import { Provider } from "react-redux";
 import { store } from "./reducers/store";
 import { Auth0Provider } from '@auth0/auth0-react';
+import { SessionBootstrap } from "~/components/SessionBootstrap";
 
 import type { Route } from "./+types/root";
 import "./app.css";
@@ -47,6 +48,7 @@ export default function App() {
       }}
     >
       <Provider store={store}>
+        <SessionBootstrap />
         <Outlet />
       </Provider>
     </Auth0Provider>

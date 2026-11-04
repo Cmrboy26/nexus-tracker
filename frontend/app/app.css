@@ -8,3 +8,13 @@ html,
 body {
   min-height: 100%;
 }
+
+.tab-icon {
+  display: block;
+  width: 2.5rem;
+  height: 2.5rem;
+  background-color: currentColor;
+  mask-position: center;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+}

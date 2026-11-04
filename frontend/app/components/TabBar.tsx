@@ -1,8 +1,8 @@
 import { Link } from "react-router";
 
-export function TabBar({ children }: { children: React.ReactNode }) {
+export function TabBar({ children, mainNav }: { children: React.ReactNode, mainNav?: boolean }) {
     return (
-        <nav className="fixed bottom-0 w-full flex justify-around items-end border-t-2 pt-2 pb-2 border-gray-600">
+        <nav className={`shrink-0 w-full flex justify-around items-end  pt-2 pb-2 border-gray-600 ${mainNav ? "border-t-2" : ""}`}>
             {children}
         </nav>
     )

@@ -1,12 +1,12 @@
-import { TabBar } from "~/components/TabBar";
-import { Tab } from "~/components/Tab";
-import { useWorkflow, Workflow, WorkflowSection } from "~/components/Workflow";
-import { Form } from "react-router";
+import { Centered } from "~/components/Centered";
+import { Form, Navigate } from "react-router";
 import { useAuth0 } from "@auth0/auth0-react";
-import { useNavigate } from "react-router"; 
 import { useState, type FormEvent } from "react";
 import { useAuthFetch } from "~/hooks/useAuthFetch";
-import { useAppDispatch, useAppSelector } from "~/hooks/redux";
+import { useProfile } from "~/hooks/useProfile";
+import { TextField } from "~/components/TextField";
+import StyledButton from "~/components/StyledButton";
+import { createProfile } from "~/module/profileApi";
 
 export function meta() {
   return [
@@ -15,49 +15,23 @@ export function meta() {
   ];
 }
 
-function StyledButton({ children, onClick }: { children: React.ReactNode, onClick?: () => void }) {
-  return (
-    <button onClick={onClick} className="mt-8 px-6 py-3 bg-blue-600 text-white text-xl font-bold rounded-lg hover:bg-blue-700">
-      {children}
-    </button>
-  );
-}
 
-function NextButton({ content, action }: { content: string, action?: (next: () => void) => void }) {
-  const { next } = useWorkflow();
-  return (
-    <StyledButton onClick={() => { if (action) {action(next)} else next() }}>
-      {content}
-    </StyledButton>
-  );
-}
 
 function NameBirthdayForm() {
-  const { next } = useWorkflow();
   const authFetch = useAuthFetch();
-  const dispatch = useAppDispatch();
+  const { refreshProfile } = useProfile();
+  const [name, setName] = useState("");
+  const [birthday, setBirthday] = useState("");
   const [errors, setErrors] = useState({ name: false, birthday: false });
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   
-  async function createProfile(name: string, birthday: string) {
-    const response = await authFetch("/profile/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-        "display_name": name,
-        "birthday": birthday
-      }) });
-    if (!response.ok) {
-      throw new Error("Unable to create profile.");
-    }
-    await refreshProfile().catch(() => {});
-  }
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const name = formData.get("name");
     const birthday = formData.get("birthday");
-    console.log({ name, birthday });
-
     // Name must be >= 3 characters
     // Birthday must be a valid date
 
@@ -65,64 +39,56 @@ function NameBirthdayForm() {
     setErrors(nextErrors);
     if (!nextErrors.name && !nextErrors.birthday) {
       setSubmitError(null);
+      setIsSubmitting(true);
       try {
-        await createProfile(name as string, birthday as string);
-        next();
+        await createProfile(authFetch, { display_name: name as string, birthday: birthday as string });
+        await refreshProfile();
       } catch (error) {
         setSubmitError(error instanceof Error ? error.message : "Unable to create profile.");
+      } finally {
+        setIsSubmitting(false);
       }
     }
   }
 
   return (
     <Form className="flex flex-col" onSubmit={handleSubmit}>
-      <label>
-        What is your name?
-        <input type="text" name="name" aria-invalid={errors.name} aria-describedby={errors.name ? "name-error" : undefined} className="border rounded-lg p-2 m-2" />
-        {errors.name && <p id="name-error" className="text-sm text-red-500">Please enter your name.</p>}
-      </label>
-      <label>
-        When is your birthday?
-        <input type="date" name="birthday" aria-invalid={errors.birthday} aria-describedby={errors.birthday ? "birthday-error" : undefined} className="border rounded-lg p-2 m-2" />
-        {errors.birthday && <p id="birthday-error" className="text-sm text-red-500">Please enter your birthday.</p>}
-      </label>
+      <TextField name="name" label="What is your name?" value={name} onChange={setName} textError={errors.name ? "Please enter your name." : undefined} />
+      <TextField name="birthday" type="date" label="When is your birthday?" value={birthday} onChange={setBirthday} textError={errors.birthday ? "Please enter your birthday." : undefined} />
       {submitError && <p role="alert" className="text-red-500">{submitError}</p>}
-      <input type="submit" className="mt-8 px-6 py-3 bg-blue-600 text-white text-xl font-bold rounded-lg hover:bg-blue-700" />
+      <input type="submit" disabled={isSubmitting} className="mt-8 px-6 py-3 bg-blue-600 text-white text-xl font-bold rounded-lg hover:bg-blue-700" />
     </Form>
   );
 }
 
 export default function Home() {
-  const { loginWithRedirect, isAuthenticated, logout } = useAuth0();
-  const navigate = useNavigate();
+  const { loginWithRedirect, isAuthenticated, isLoading, error } = useAuth0();
+  const { status, error: profileError, refreshProfile } = useProfile();
 
-  function handleContinue(next: () => void) {
-      if (!isAuthenticated) {
-        loginWithRedirect();
-      } else {
-        next();
-      }
+  if (error) return <Centered><p>Authentication failed.</p></Centered>;
+  if (isLoading || (isAuthenticated && status === "loading")) return <Centered><p>Loading...</p></Centered>;
+  if (!isAuthenticated) {
+    return (
+      <Centered>
+        <h1 className="text-6xl font-bold text-center">Welcome to<br/>NEXUS</h1>
+        <StyledButton onClick={() => void loginWithRedirect()}>Login to Get Started</StyledButton>
+      </Centered>
+    );
   }
-
-  function onFinish() {
-    navigate("/home");
+  if (status === "error") {
+    return (
+      <Centered>
+        <p role="alert">{profileError}</p>
+        <StyledButton onClick={() => void refreshProfile()}>Try again</StyledButton>
+      </Centered>
+    );
   }
+  if (status === "ready") return <Navigate to="/home" replace />;
 
   return (
-    <>
-      <Workflow initialStep={isAuthenticated ? 2 : 0} onFinish={onFinish}>
-        <WorkflowSection>
-          <h1 className="text-6xl font-bold text-center">Welcome to<br/>NEXUS</h1>
-          <NextButton content={
-            isAuthenticated ? "Continue" : "Login to Get Started"
-          } action={handleContinue} />
-          {/* <NextButton content="Register" /> */}
-        </WorkflowSection>
-        <WorkflowSection>
-          <h1 className="text-4xl font-bold text-center">Tell us about yourself</h1>
-          <NameBirthdayForm />
-        </WorkflowSection>
-      </Workflow>
-    </>
+    <Centered>
+      <h1 className="text-4xl font-bold text-center">Tell us about yourself</h1>
+      <NameBirthdayForm />
+    </Centered>
   );
 }
