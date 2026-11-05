@@ -16,6 +16,10 @@ export function Section({ children, flex, notSectioned, ...options }: { children
   );
 }
 
+export function closeSectionDropdown(element: HTMLElement) {
+  element.closest("details")?.removeAttribute("open");
+}
+
 export function SectionDropdown({ children, summary }: { children: React.ReactNode; summary?: React.ReactNode }) {
 
   return (

@@ -4,7 +4,7 @@ from fastapi import Depends
 from typing import Annotated
 
 from databridges import user_databridge
-from user_model import User
+from models.user_model import User
 
 auth0 = Auth0FastAPI(
     domain=os.environ.get("AUTH0_DOMAIN"),

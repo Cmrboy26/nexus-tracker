@@ -1,7 +1,7 @@
 import uuid
 from pydantic import BaseModel
 
-
+from pydantic import ConfigDict
 class User(BaseModel):
     """
     An authenticated user.

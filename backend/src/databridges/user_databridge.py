@@ -1,6 +1,6 @@
 import uuid
 import database
-from user_model import User
+from models.user_model import User
 
 def parse_user(user_row):
     return User(

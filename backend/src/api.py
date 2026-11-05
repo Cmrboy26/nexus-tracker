@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 import routers.root
+import routers.tracking
 import routers.user
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -24,6 +25,7 @@ def create_api():
     )
 
     app.include_router(routers.root.router)
+    app.include_router(routers.tracking.router)
     app.include_router(routers.user.router)
     
     logger.info("API created and routers included")
