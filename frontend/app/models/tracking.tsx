@@ -1,4 +1,4 @@
-import type { paths } from "~/models/api.generated";
+import type { components, paths } from "~/models/api.generated";
 
 type TrackingSuggestions = paths["/tracking/suggestions"]["get"]["responses"][200]["content"]["application/json"];
 type Drink = TrackingSuggestions["drinks"][number];
@@ -8,15 +8,21 @@ type MoodEntry = {
     labels: string[];
     time: Date;
 }
+type LoggedMoodEntry = Omit<components["schemas"]["LoggedMoodEntry"], "time"> & { time: Date };
 
-type MealEntry = {
-    name: string;
-    period: "am" | "mid" | "pm";
-}
+type MealEntry = components["schemas"]["MealEntry"];
+type LoggedMealEntry = components["schemas"]["LoggedMealEntry"];
 
 type DrinkEntry = {
     drink: Drink;
     time: Date;
 }
+type LoggedDrinkEntry = Omit<components["schemas"]["LoggedDrinkEntry"], "time"> & { time: Date };
 
-export type { Drink, MoodEntry, MealEntry, DrinkEntry, TrackingSuggestions };
+type DailyLog = {
+    mood: LoggedMoodEntry[];
+    meals: LoggedMealEntry[];
+    drinks: LoggedDrinkEntry[];
+}
+
+export type { Drink, MoodEntry, LoggedMoodEntry, MealEntry, LoggedMealEntry, DrinkEntry, LoggedDrinkEntry, DailyLog, TrackingSuggestions };

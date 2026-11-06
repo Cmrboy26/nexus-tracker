@@ -72,6 +72,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/day/{date}/mood": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Mood */
+        post: operations["create_mood_day__date__mood_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/day/{date}/meal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Meal */
+        post: operations["create_meal_day__date__meal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/day/{date}/drink": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Drink */
+        post: operations["create_drink_day__date__drink_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tracking/entries/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Entry */
+        delete: operations["delete_entry_tracking_entries__entry_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/profile/update": {
         parameters: {
             query?: never;
@@ -121,10 +189,68 @@ export interface components {
             /** Unit */
             unit?: ("cups" | "ml" | "oz") | null;
         };
+        /** DrinkEntry */
+        DrinkEntry: {
+            drink: components["schemas"]["Drink"];
+            /**
+             * Time
+             * Format: date-time
+             */
+            time: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** LoggedDrinkEntry */
+        LoggedDrinkEntry: {
+            drink: components["schemas"]["Drink"];
+            /**
+             * Time
+             * Format: date-time
+             */
+            time: string;
+            /** Id */
+            id: string;
+        };
+        /** LoggedMealEntry */
+        LoggedMealEntry: {
+            /** Name */
+            name: string;
+            /**
+             * Period
+             * @enum {string}
+             */
+            period: "am" | "mid" | "pm";
+            /** Id */
+            id: string;
+        };
+        /** LoggedMoodEntry */
+        LoggedMoodEntry: {
+            /** Ratings */
+            ratings: {
+                [key: string]: number;
+            };
+            /** Labels */
+            labels: string[];
+            /**
+             * Time
+             * Format: date-time
+             */
+            time: string;
+            /** Id */
+            id: string;
+        };
+        /** MealEntry */
+        MealEntry: {
+            /** Name */
+            name: string;
+            /**
+             * Period
+             * @enum {string}
+             */
+            period: "am" | "mid" | "pm";
         };
         /** MealSuggestions */
         MealSuggestions: {
@@ -135,12 +261,40 @@ export interface components {
             /** Pm */
             pm: string[];
         };
+        /** MoodEntry */
+        MoodEntry: {
+            /** Ratings */
+            ratings: {
+                [key: string]: number;
+            };
+            /** Labels */
+            labels: string[];
+            /**
+             * Time
+             * Format: date-time
+             */
+            time: string;
+        };
         /** ProfileUpdate */
         ProfileUpdate: {
             /** Display Name */
             display_name?: string | null;
             /** Birthday */
             birthday?: string | null;
+        };
+        /** TrackingLog */
+        TrackingLog: {
+            /**
+             * Date
+             * Format: date-time
+             */
+            date: string;
+            /** Mood */
+            mood: components["schemas"]["LoggedMoodEntry"][];
+            /** Meals */
+            meals: components["schemas"]["LoggedMealEntry"][];
+            /** Drinks */
+            drinks: components["schemas"]["LoggedDrinkEntry"][];
         };
         /** TrackingSuggestions */
         TrackingSuggestions: {
@@ -249,8 +403,142 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TrackingLog"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_mood_day__date__mood_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                date: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoodEntry"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoggedMoodEntry"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_meal_day__date__meal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                date: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MealEntry"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoggedMealEntry"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_drink_day__date__drink_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                date: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DrinkEntry"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoggedDrinkEntry"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_entry_tracking_entries__entry_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

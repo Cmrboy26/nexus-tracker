@@ -23,15 +23,24 @@ class MoodEntry(BaseModel):
     labels: List[str]
     time: datetime
 
+class LoggedMoodEntry(MoodEntry):
+    id: str
+
 class MealEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str
     period: Literal["am", "mid", "pm"]
 
+class LoggedMealEntry(MealEntry):
+    id: str
+
 class DrinkEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
     drink: Drink
     time: datetime
+
+class LoggedDrinkEntry(DrinkEntry):
+    id: str
 
 class TrackingSuggestions(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -42,6 +51,6 @@ class TrackingSuggestions(BaseModel):
 class TrackingLog(BaseModel):
     model_config = ConfigDict(extra="forbid")
     date: datetime
-    mood: List[MoodEntry]
-    meals: List[MealEntry]
-    drinks: List[DrinkEntry]
+    mood: List[LoggedMoodEntry]
+    meals: List[LoggedMealEntry]
+    drinks: List[LoggedDrinkEntry]

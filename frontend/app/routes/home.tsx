@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useRef, useState } from "react";
 import { useAuth0 } from '@auth0/auth0-react';
 import  { Sections,Section, SectionTitle, SectionDropdown, closeSectionDropdown } from "~/components/Sections";
 import { useAuthFetch } from "~/hooks/useAuthFetch";
@@ -9,8 +8,8 @@ import { Tab } from "~/components/Tab";
 import { LabelSelector } from "~/components/LabelSelector";
 import { NumberSelector } from "~/components/NumberSelector";
 import { Button } from "~/components/Button";
-import type { Drink, DrinkEntry, MealEntry, MoodEntry, TrackingSuggestions } from "~/models/tracking";
-import { getSuggestions } from "~/module/trackingApi";
+import type { DailyLog, Drink, MealEntry, MoodEntry, TrackingSuggestions } from "~/models/tracking";
+import { deleteEntry, getDay, getSuggestions, saveDrink, saveMeal, saveMood } from "~/module/trackingApi";
 
 export function meta() {
   return [
@@ -19,8 +18,15 @@ export function meta() {
   ];
 }
 
-function formatTime(time: Date) {
-  return time.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+function localDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function latestTime(entries: { time: Date }[]) {
+  return entries.reduce<number | null>((latest, entry) => {
+    const time = entry.time.getTime();
+    return latest === null ? time : Math.max(latest, time);
+  }, null);
 }
 
 export function IconSection({ children, image, iconColor }: { children: React.ReactNode, image: string, iconColor?: string }) {
@@ -83,6 +89,7 @@ export function DrinkBuilder({ drink, onChange, onSubmit }: { drink: Drink | nul
           onChange={(event) => onChange({ ...drink, unit: (event.target.value || undefined) as Drink["unit"] })}
           className="border rounded-lg p-2 m-2 bg-white dark:bg-gray-900 dark:text-white"
         >
+          <option value="">Not specified</option>
           <option value="cups">cups</option>
           <option value="oz">oz</option>
           <option value="ml">ml</option>
@@ -118,8 +125,9 @@ export function TimeSelector({ selectedTime, onSelect }: { selectedTime: Date, o
 }
 
 export default function Home() {
-  const { profile, refreshProfile } = useProfile();
+  const { profile } = useProfile();
   const { isAuthenticated, user } = useAuth0();
+  const subject = user?.sub;
   const authFetch = useAuthFetch();
   const displayName = profile?.display_name ?? "";
 
@@ -131,32 +139,36 @@ export default function Home() {
   const personalizedGreeting = `${currentGreeting}${displayName ? `, ${displayName}` : ""}.`;
 
   const [mealSelectedTab, setMealSelectedTab] = useState<MealEntry["period"]>(currentDayTime);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState(() => localDate(new Date()));
   const [selectedTime, setSelectedTime] = useState(new Date()); 
+  const [dayLog, setDayLog] = useState<{ date: string, subject: string, log: DailyLog } | null>(null);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
+  const [reloadDay, setReloadDay] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const currentLog = dayLog?.date === selectedDate && dayLog.subject === subject ? dayLog.log : null;
 
-  const [latestLoggedTime, setLatestLoggedTime] = useState<Record<"mood" | "meal" | "drinks", Date | null>>({
-    mood: null,
-    meal: null,
-    drinks: null
-  });
+  const [lastMeal, setLastMeal] = useState<{ date: string, subject: string, time: number } | null>(null);
+  const lastMealTime = lastMeal?.date === selectedDate && lastMeal.subject === subject ? lastMeal.time : null;
+  const lastMoodTime = latestTime(currentLog?.mood ?? []);
+  const lastDrinkTime = latestTime(currentLog?.drinks ?? []);
   const [, setColorTick] = useState(0);
 
   useEffect(() => {
     const now = Date.now();
-    const timers = Object.values(latestLoggedTime).flatMap(loggedTime => {
-      if (!loggedTime) return [];
+    const timers = [lastMoodTime, lastMealTime, lastDrinkTime].flatMap(loggedTime => {
+      if (loggedTime === null) return [];
       return [2, 4].flatMap(hours => {
-        const delay = loggedTime.getTime() + hours * 60 * 60 * 1000 - now;
+        const delay = loggedTime + hours * 60 * 60 * 1000 - now;
         return delay > 0 ? [setTimeout(() => setColorTick(previous => previous + 1), delay)] : [];
       });
     });
     return () => timers.forEach(clearTimeout);
-  }, [latestLoggedTime]);
+  }, [lastMoodTime, lastMealTime, lastDrinkTime]);
 
-  function determineColor(category: "mood" | "meal" | "drinks") {
-    const loggedTime = latestLoggedTime[category];
-    if (!loggedTime) return "text-white";
-    const elapsedHours = (Date.now() - loggedTime.getTime()) / (60 * 60 * 1000);
+  function determineColor(loggedTime: number | null) {
+    if (loggedTime === null) return "text-white";
+    const elapsedHours = (Date.now() - loggedTime) / (60 * 60 * 1000);
     if (elapsedHours < 2) return "text-green-500 dark:text-green-700";
     if (elapsedHours < 4) return "text-orange-400 dark:text-yellow-500";
     return undefined;
@@ -166,7 +178,7 @@ export default function Home() {
   const weekDates = Array.from({ length: 7 }, (_, i) => {
     const date = new Date();
     date.setDate(date.getDate() - date.getDay() + i);
-    return `${date.getMonth() + 1}/${date.getDate()}`;
+    return { date, key: localDate(date), label: `${date.getMonth() + 1}/${date.getDate()}` };
   });
   const weekDays = ["S", "M", "T", "W", "T", "F", "S"];
   const weekStatusTypes = ["budding", "bloomed", "evergreen"];
@@ -181,33 +193,28 @@ export default function Home() {
     return weekStatusTypes[randomIndex];
   });
 
-  const [ateEntries, setAteEntries] = useState<Record<"am" | "mid" | "pm", string[]>>({
-    am: ["Eggs"],
-    mid: [],
-    pm: []
-  });
+  const ateEntries = Array.from(new Set(currentLog?.meals.filter(meal => meal.period === mealSelectedTab).map(meal => meal.name) ?? []));
   const maxVisibleEntries = 5;
 
   const feelingCategories = ["mood", "energy", "stress", "focus", "motivation"];
   const [feelings, setFeelings] = useState<MoodEntry["ratings"]>({});
   const [feelingLabels, setFeelingLabels] = useState<string[]>([]);
-  const [selectedDrink, setSelectedDrink] = useState<string | null>(null);
   const [builtDrink, setBuiltDrink] = useState<Drink | null>(null);
 
 
-  const [suggestions, setSuggestions] = useState<TrackingSuggestions | null>(null);
+  const [suggestions, setSuggestions] = useState<{ subject: string, data: TrackingSuggestions } | null>(null);
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
-  const subject = user?.sub;
+  const [reloadSuggestions, setReloadSuggestions] = useState(0);
+  const currentSuggestions = isAuthenticated && suggestions && suggestions.subject === subject ? suggestions.data : null;
 
   useEffect(() => {
-    setSuggestions(null);
     setSuggestionsError(null);
     if (!isAuthenticated || !subject) return;
 
     const controller = new AbortController();
     getSuggestions(authFetch, controller.signal)
       .then(data => {
-        if (!controller.signal.aborted) setSuggestions(data);
+        if (!controller.signal.aborted) setSuggestions({ subject, data });
       })
       .catch(error => {
         if (!controller.signal.aborted) {
@@ -215,53 +222,81 @@ export default function Home() {
         }
       });
     return () => controller.abort();
-  }, [authFetch, isAuthenticated, subject]);
+  }, [authFetch, isAuthenticated, subject, reloadSuggestions]);
 
-  const commonFeelings = suggestions?.mood ?? [];
-  const commonMeals = suggestions?.meals ?? { am: [], mid: [], pm: [] };
-  const commonDrinks = suggestions?.drinks ?? [];
+  useEffect(() => {
+    setDayLog(null);
+    setTrackingError(null);
+    if (!isAuthenticated || !subject) return;
+
+    const controller = new AbortController();
+    getDay(authFetch, selectedDate, controller.signal)
+      .then(log => {
+        if (controller.signal.aborted) return;
+        setDayLog({ date: selectedDate, subject, log });
+      })
+      .catch(error => {
+        if (!controller.signal.aborted) setTrackingError(error instanceof Error ? error.message : "Unable to load entries.");
+      });
+    return () => controller.abort();
+  }, [authFetch, isAuthenticated, subject, selectedDate, reloadDay]);
+
+  const commonFeelings = currentSuggestions?.mood ?? [];
+  const commonMeals = currentSuggestions?.meals ?? { am: [], mid: [], pm: [] };
+  const commonDrinks = currentSuggestions?.drinks ?? [];
 
 
-  function submitMood(mood: MoodEntry) {
-    console.log("Submitting mood:", mood);
-    setLatestLoggedTime(previous => ({ ...previous, mood: new Date() }));
+  async function updateDay<T>(action: () => Promise<T>, update: (log: DailyLog, result: T) => DailyLog) {
+    if (!currentLog || !subject || savingRef.current) return false;
+    const date = selectedDate;
+    savingRef.current = true;
+    setSaving(true);
+    setTrackingError(null);
+    try {
+      const result = await action();
+      setDayLog(previous => previous?.date === date && previous.subject === subject ? { date, subject, log: update(previous.log, result) } : previous);
+      setReloadSuggestions(previous => previous + 1);
+      return true;
+    } catch (error) {
+      setTrackingError(error instanceof Error ? error.message : "Unable to save entry.");
+      return false;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }
-
-  function submitMeal(meal: MealEntry) {
-    console.log("Submitting meal:", meal);
-    setLatestLoggedTime(previous => ({ ...previous, meal: new Date() }));
-  }
-
-  function submitDrink(entry: DrinkEntry) {
-    console.log("Submitting drink:", entry);
-    setLatestLoggedTime(previous => ({ ...previous, drinks: new Date() }));
-  }
-
-  const lastDrinkTime = latestLoggedTime.drinks ? formatTime(latestLoggedTime.drinks) : null;
 
   return (
     <>
       <Sections>
         {suggestionsError && <p role="alert">{suggestionsError}</p>}
+        {trackingError && <p role="alert">{trackingError} {!currentLog && <Button compact onClick={() => setReloadDay(previous => previous + 1)}>Retry</Button>}</p>}
         <SectionTitle>
           {personalizedGreeting}
         </SectionTitle>
         <Section>
-          <div className="flex flex-row flex-wrap justify-center items-center gap-4 w-full">
+          <div className="flex flex-row flex-wrap justify-between items-center gap-4 w-full">
+            <fieldset aria-label="Select day" disabled={saving} className="w-full">
             <TabBar>
               {
-                weekDates.map((date) => {
+                weekDates.map((date, index) => {
                   return (
-                    <div className="flex flex-col items-center">
-                      <p>{weekDays[weekDates.indexOf(date)]}</p>
-                      <Tab key={date} onClick={() => {
-                        setSelectedDate(date);
-                      }} label={date} icon={`/icons/${weekStatus[weekDates.indexOf(date)]}.svg`} isActive={selectedDate === date} />
+                    <div key={date.key} className="flex flex-col items-center">
+                      <p>{weekDays[index]}</p>
+                      <Tab onClick={() => {
+                        setSelectedDate(date.key);
+                        setSelectedTime(previous => {
+                          const time = new Date(previous);
+                          time.setFullYear(date.date.getFullYear(), date.date.getMonth(), date.date.getDate());
+                          return time;
+                        });
+                      }} label={date.label} icon={`/icons/${weekStatus[index]}.svg`} isActive={selectedDate === date.key} />
                     </div>
                   );
                 })
               }
             </TabBar>
+            </fieldset>
           </div>
         </Section>
         <IconSection image="/icons/today.svg">
@@ -273,7 +308,7 @@ export default function Home() {
             <p>Content Here</p>
           </SectionDropdown>
         </IconSection>
-        <IconSection image="/icons/smile.svg" iconColor={determineColor("mood")}>
+        <IconSection image="/icons/smile.svg" iconColor={determineColor(lastMoodTime)}>
           <SectionDropdown summary={
               <>
                 <SectionTitle>
@@ -281,6 +316,7 @@ export default function Home() {
                 </SectionTitle>
               </>
           }>
+            <fieldset aria-label="Mood entry" disabled={!currentLog || saving}>
             <TimeSelector selectedTime={selectedTime} onSelect={setSelectedTime} />
             {
               feelingCategories.map((category) => (
@@ -303,15 +339,19 @@ export default function Home() {
               addLabel="Add"
               compact
             />
-            <Button className="w-full" onClick={(event) => {
-              submitMood({ ratings: feelings, labels: feelingLabels, time: selectedTime });
-              closeSectionDropdown(event.currentTarget);
+            <Button className="w-full" onClick={async (event) => {
+              const button = event.currentTarget;
+              const mood = { ratings: feelings, labels: feelingLabels, time: selectedTime };
+              if (await updateDay(() => saveMood(authFetch, selectedDate, mood), (log, saved) => ({ ...log, mood: [...log.mood, saved] }))) {
+                closeSectionDropdown(button);
+              }
             }}>
               Log Moods & Feelings
             </Button>
+            </fieldset>
           </SectionDropdown>
         </IconSection>
-        <IconSection image="/icons/meal.svg" iconColor={determineColor("meal")}>
+        <IconSection image="/icons/meal.svg" iconColor={determineColor(lastMealTime)}>
           <SectionDropdown summary={
               <>
                 <SectionTitle>
@@ -319,6 +359,7 @@ export default function Home() {
                 </SectionTitle>
               </>
           }>
+            <fieldset aria-label="Meal entry" disabled={!currentLog || saving}>
             <TabBar>
               <Tab key="am" label="AM" icon="/icons/meal.svg" isActive={mealSelectedTab === "am"} onClick={() => setMealSelectedTab("am")} />
               <Tab key="mid" label="MID" icon="/icons/meal.svg" isActive={mealSelectedTab === "mid"} onClick={() => setMealSelectedTab("mid")} />
@@ -326,12 +367,20 @@ export default function Home() {
             </TabBar>
             <LabelSelector
               mode="chips"
-              value={ateEntries[mealSelectedTab]}
-              onChange={(entries) => {
-                if (entries.length > ateEntries[mealSelectedTab].length) {
-                  submitMeal({ name: entries[entries.length - 1], period: mealSelectedTab });
+              value={ateEntries}
+              onChange={async (entries) => {
+                if (entries.length > ateEntries.length) {
+                  const meal = { name: entries[entries.length - 1], period: mealSelectedTab };
+                  if (await updateDay(() => saveMeal(authFetch, selectedDate, meal), (log, saved) => ({ ...log, meals: [...log.meals, saved] }))) {
+                    if (subject) setLastMeal({ date: selectedDate, subject, time: Date.now() });
+                    return true;
+                  }
+                  return false;
+                } else {
+                  const removed = currentLog?.meals.find(meal => meal.period === mealSelectedTab && !entries.includes(meal.name));
+                  if (removed) return updateDay(() => deleteEntry(authFetch, removed.id), log => ({ ...log, meals: log.meals.filter(meal => meal.id !== removed.id) }));
+                  return false;
                 }
-                setAteEntries(previous => ({ ...previous, [mealSelectedTab]: entries }));
               }}
               options={commonMeals[mealSelectedTab].map((label, index, entries) => ({ label, rank: entries.length - index }))}
               inputLabel="Add new meal"
@@ -340,9 +389,10 @@ export default function Home() {
               suggestionsLabel="... or select from common entries"
               maxVisibleSelected={maxVisibleEntries}
             />
+            </fieldset>
           </SectionDropdown>
         </IconSection>
-        <IconSection image="/icons/water.svg" iconColor={determineColor("drinks")}>
+        <IconSection image="/icons/water.svg" iconColor={determineColor(lastDrinkTime)}>
             <SectionDropdown summary={
               <>
                 <SectionTitle>
@@ -350,16 +400,16 @@ export default function Home() {
                 </SectionTitle>
               </>
             }>
+              <fieldset aria-label="Drink entry" disabled={!currentLog || saving}>
               <TimeSelector selectedTime={selectedTime} onSelect={setSelectedTime} />
               {
-                !selectedDrink && (
+                !builtDrink && (
                 <LabelSelector
                   mode="single"
-                  value={selectedDrink ? [selectedDrink] : []}
+                  value={[]}
                   onChange={(entries) => {
                     const name = entries[0] ?? null;
                     const preset = commonDrinks.find(drink => drink.name === name);
-                    setSelectedDrink(name);
                     setBuiltDrink(name ? { ...(preset ?? { name }) } : null);
                   }}
                   options={commonDrinks.map((drink, index, entries) => ({ label: drink.name, rank: entries.length - index }))}
@@ -369,21 +419,24 @@ export default function Home() {
                 />)
               }
               {
-                selectedDrink && (
+                builtDrink && (
                   <>
                     <div className="flex items-center justify-between">
-                      <p>Selected drink: {selectedDrink}</p>
-                      <Button compact onClick={() => {setSelectedDrink(null); setBuiltDrink(null);}}>Clear</Button>
+                      <p>Selected drink: {builtDrink.name}</p>
+                      <Button compact onClick={() => setBuiltDrink(null)}>Clear</Button>
                     </div>
-                    <DrinkBuilder drink={builtDrink} onChange={setBuiltDrink} onSubmit={(event, drink) => {
-                      submitDrink({ drink, time: selectedTime });
-                      setSelectedDrink(null);
-                      setBuiltDrink(null);
-                      closeSectionDropdown(event.currentTarget);
+                    <DrinkBuilder drink={builtDrink} onChange={setBuiltDrink} onSubmit={async (event, drink) => {
+                      const button = event.currentTarget;
+                      const entry = { drink, time: selectedTime };
+                      if (await updateDay(() => saveDrink(authFetch, selectedDate, entry), (log, saved) => ({ ...log, drinks: [...log.drinks, saved] }))) {
+                        setBuiltDrink(null);
+                        closeSectionDropdown(button);
+                      }
                     }} />
                   </>
                 )
               }
+              </fieldset>
             </SectionDropdown>
         </IconSection>
       </Sections>

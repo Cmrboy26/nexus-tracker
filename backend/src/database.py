@@ -1,6 +1,7 @@
 import sqlite3
 from os import listdir
 from contextlib import closing
+from datetime import datetime
 
 import logging
 
@@ -12,7 +13,9 @@ tracked_path = "/tracked"
 untracked_path = "/untracked"
 
 def get_connection():
-    return sqlite3.connect(database)
+    conn = sqlite3.connect(database)
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
 
 def execute_query(query, params=()):
     conn = get_connection()
@@ -43,7 +46,10 @@ def initialize_database():
     )
 
     # Apply tracked migrations
-    for migration in listdir(migrations_path + tracked_path):
+    for migration in sorted(
+        listdir(migrations_path + tracked_path),
+        key=lambda name: (datetime.strptime(name.split("-")[0], "%m%d%Y"), name),
+    ):
         is_applied = cursor.execute(
             "SELECT 1 FROM migrations WHERE name = ?",
             (migration,)

@@ -10,7 +10,7 @@ type LabelOption = {
 type LabelSelectorProps = {
   mode: "chips" | "toggle" | "single";
   value: string[];
-  onChange: (value: string[]) => void;
+  onChange: (value: string[]) => void | boolean | Promise<void | boolean>;
   options: readonly LabelOption[];
   inputLabel: string;
   addLabel: string;
@@ -46,15 +46,18 @@ export function LabelSelector({ mode, value, onChange, options, inputLabel, addL
     .filter(option => mode !== "chips" || !selected.has(normalize(option.label)))
     .sort((first, second) => (second.rank ?? 0) - (first.rank ?? 0) || first.label.localeCompare(second.label));
 
-  const add = (label: string) => {
+  const add = async (label: string) => {
     const trimmed = label.trim();
     if (!trimmed) return;
     const canonical = available.get(normalize(trimmed))?.label ?? trimmed;
     if (mode !== "chips" && !available.has(normalize(canonical))) {
       setCustomOptions(previous => [...previous, canonical]);
     }
-    if (mode === "single") onChange([canonical]);
-    else if (!selected.has(normalize(canonical))) onChange([...value, canonical]);
+    if (mode === "single") {
+      if (await onChange([canonical]) === false) return;
+    } else if (!selected.has(normalize(canonical))) {
+      if (await onChange([...value, canonical]) === false) return;
+    }
     setInput("");
   };
 
